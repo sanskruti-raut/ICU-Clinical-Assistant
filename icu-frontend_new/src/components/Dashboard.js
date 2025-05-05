@@ -6,7 +6,7 @@ import { fetchPriorityPatients, fetchAlerts, fetchAnalyticsSummary } from '../ut
 
 function Dashboard() {
   const [patients, setPatients] = useState([]);
-  const [alerts, setAlerts] = useState({});
+  const [alerts, setAlerts] = useState({ alerts: [] });
   const [analytics, setAnalytics] = useState(null);
   const [loading, setLoading] = useState(true);
 
@@ -21,6 +21,12 @@ function Dashboard() {
         // Load analytics
         const analyticsData = await fetchAnalyticsSummary();
         setAnalytics(analyticsData);
+        
+        // Initial alerts load
+        const alertsData = await fetchAlerts();
+        if (alertsData.alerts) {
+          setAlerts(alertsData);
+        }
       } catch (error) {
         console.error('Error loading dashboard data:', error);
       }
@@ -32,7 +38,7 @@ function Dashboard() {
     // Set up polling for alerts
     const alertsInterval = setInterval(async () => {
       const alertsData = await fetchAlerts();
-      if (alertsData.alert) {
+      if (alertsData.alerts) {
         setAlerts(alertsData);
       }
     }, 5000);

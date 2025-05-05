@@ -6,11 +6,12 @@ const pool = require('../db');
 router.get('/priority-patients', async (req, res) => {
   try {
     const result = await pool.query(`
-      SELECT subject_id, gender, anchor_age, disease 
-      FROM toppatients 
-      ORDER BY anchor_age DESC 
+      SELECT id, gender, age, diseases
+      FROM priority_patients
+      ORDER BY age DESC
       LIMIT 5
     `);
+    console.log("Priority patients fetched:", result.rows); 
     res.json(result.rows);
   } catch (err) {
     console.error(err);
@@ -23,24 +24,24 @@ router.get('/patient-overview/:id', async (req, res) => {
   const id = req.params.id;
   try {
     const patient = await pool.query(`
-      SELECT subject_id, gender, anchor_age, disease 
-      FROM toppatients 
-      WHERE subject_id = $1
+      SELECT id, gender, age, diseases
+      FROM priority_patients
+      WHERE id = $1
     `, [id]);
 
     const icu = await pool.query(`
-      SELECT intime, outtime, los 
-      FROM icustays 
-      WHERE subject_id = $1 
-      ORDER BY intime DESC 
+      SELECT intime, outtime, los
+      FROM icustays
+      WHERE subject_id = $1
+      ORDER BY intime DESC
       LIMIT 1
     `, [id]);
 
     const vitals = await pool.query(`
-      SELECT charttime, label, valuenum 
-      FROM vitals 
-      WHERE subject_id = $1 
-      ORDER BY charttime DESC 
+      SELECT charttime, label, valuenum
+      FROM vitals
+      WHERE subject_id = $1
+      ORDER BY charttime DESC
       LIMIT 5
     `, [id]);
 
