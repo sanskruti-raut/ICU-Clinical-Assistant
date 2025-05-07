@@ -3,6 +3,18 @@ let currentIndex = 0;
 let latestVital = null;
 let socketInstance = null;  // Store socket.io instance
 
+// at the top of your module
+const AWS = require('aws-sdk');
+
+// choose the region of your SNS Topic
+AWS.config.update({ region: 'us-west-1' });
+
+const sns = new AWS.SNS();
+
+// your SNS Topic ARN
+const HEART_RATE_TOPIC_ARN = "arn:aws:sns:us-west-1:141571820144:heartAlerts";
+
+
 // Accept socket.io instance when starting simulation
 function startSimulation(io) {
   socketInstance = io;  // Store the io instance for later use
@@ -51,22 +63,53 @@ function getLatestVital() {
   return latestVital;
 }
 
+// function checkForAlert(vital) {
+//   if (!vital) return null;
+
+//   // Instead of returning early, collect alerts in an array
+//   let alerts = [];
+
+//   if (vital.label === 'Heart Rate' && vital.valuenum > 50) {
+//     alerts.push('ALERT: High Heart Rate = ' + vital.valuenum + ' for Patient ' + vital.subject_id);
+//   }
+
+//   if (vital.label === 'Systolic BP' && vital.valuenum > 50) {
+//     alerts.push('ALERT: High Blood Pressure = ' + vital.valuenum + ' for Patient ' + vital.subject_id);
+//   }
+
+//   return alerts.length > 0 ? alerts[0] : null; // Return just the first alert to maintain compatibility
+// }
+
 function checkForAlert(vital) {
   if (!vital) return null;
 
-  // Instead of returning early, collect alerts in an array
-  let alerts = [];
+  // only care about heart‐rate here
+  if (vital.label === 'Heart Rate' && vital.valuenum > 90) {
+    const alertMsg = `ALERT: High Heart Rate = ${vital.valuenum} for Patient ${vital.subject_id}`;
+    
+    // publish to SNS
+    try {
+        sns.publish({
+        TopicArn: HEART_RATE_TOPIC_ARN,
+        Message: alertMsg,
+        Subject: 'High Heart Rate Alert'
+      }).promise();
+      console.log('SNS notification sent:', alertMsg);
+    } catch (err) {
+      console.error('Failed to publish SNS:', err);
+    }
 
-  if (vital.label === 'Heart Rate' && vital.valuenum > 50) {
-    alerts.push('ALERT: High Heart Rate = ' + vital.valuenum + ' for Patient ' + vital.subject_id);
+    return alertMsg;
   }
 
+  // other alerts unchanged
   if (vital.label === 'Systolic BP' && vital.valuenum > 50) {
-    alerts.push('ALERT: High Blood Pressure = ' + vital.valuenum + ' for Patient ' + vital.subject_id);
+    return `ALERT: High Blood Pressure = ${vital.valuenum} for Patient ${vital.subject_id}`;
   }
 
-  return alerts.length > 0 ? alerts[0] : null; // Return just the first alert to maintain compatibility
+  return null;
 }
+
 
 const simulators = {};  // Holds state per subject_id
 
