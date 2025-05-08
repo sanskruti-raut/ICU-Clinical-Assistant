@@ -2,7 +2,39 @@ const express = require('express');
 const router = express.Router();
 const pool = require('../db');
 
-// Get top 5 priority patients
+// Helper: generate a random risk score (float with 16 decimal places)
+function generateRandomScore() {
+  return parseFloat(Math.random().toFixed(16));
+}
+
+// POST /api/add-patient - Add new patient with auto-generated risk score
+router.post('/add-patient', async (req, res) => {
+  try {
+    const { id, age, gender, diseases } = req.body;
+
+    if (!id || !age || !gender || !diseases) {
+      return res.status(400).json({ error: "Missing required fields" });
+    }
+
+    const risk_score = generateRandomScore();
+
+    const insertQuery = `
+      INSERT INTO priority_patients (id, age, gender, diseases, risk_score)
+      VALUES ($1, $2, $3, $4, $5)
+    `;
+
+    await pool.query(insertQuery, [id, age, gender, diseases, risk_score]);
+
+    console.log("New patient added:", { id, age, gender, diseases, risk_score });
+
+    res.status(201).json({ id, age, gender, diseases, risk_score });
+  } catch (err) {
+    console.error("Error adding patient:", err);
+    res.status(500).json({ error: "Server error" });
+  }
+});
+
+// GET /api/priority-patients - Get top 5 patients ordered by age
 router.get('/priority-patients', async (req, res) => {
   try {
     const result = await pool.query(`
@@ -11,7 +43,7 @@ router.get('/priority-patients', async (req, res) => {
       ORDER BY age DESC
       LIMIT 5
     `);
-    console.log("Priority patients fetched:", result.rows); 
+    console.log("Priority patients fetched:", result.rows);
     res.json(result.rows);
   } catch (err) {
     console.error(err);
@@ -19,7 +51,7 @@ router.get('/priority-patients', async (req, res) => {
   }
 });
 
-// Get full patient overview
+// GET /api/patient-overview/:id - Get full patient + ICU + vitals data
 router.get('/patient-overview/:id', async (req, res) => {
   const id = req.params.id;
   try {
