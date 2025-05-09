@@ -66,7 +66,7 @@ function getLatestVital() {
 // function checkForAlert(vital) {
 //   if (!vital) return null;
 
-//   // Instead of returning early, collect alerts in an array
+   // Instead of returning early, collect alerts in an array
 //   let alerts = [];
 
 //   if (vital.label === 'Heart Rate' && vital.valuenum > 50) {

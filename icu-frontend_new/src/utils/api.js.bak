@@ -138,14 +138,3 @@ export const refreshSepsisScores = async (patientIds) => {
     error: result.status === 'rejected' ? result.reason : null
   }));
 };
-
-export const searchPatientById = async (patientId) => {
-  try {
-    // First check if the patient exists in the priority patients
-    const response = await api.get(`/patient-overview/${patientId}`);
-    return response.data;
-  } catch (error) {
-    console.error(`Error searching for patient ${patientId}:`, error);
-    throw new Error(`Patient with ID ${patientId} not found`);
-  }
-};

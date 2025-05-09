@@ -24,24 +24,24 @@ async function loadWeights() {
     }
     return weightsLoaded;
   }
-
+  
   if (weightsLoaded && Object.keys(weights).length > 1) {
     console.log("Weights already loaded, skipping load");
     return true;
   }
-
+  
   loadingInProgress = true;
-
+  
   try {
     console.log("Starting to load weights...");
-
+    
     // Set a timeout for the database query
     const timeoutPromise = new Promise((_, reject) => {
       setTimeout(() => {
         reject(new Error("Weights loading timed out after 10 seconds"));
       }, 10000); // 10 second timeout
     });
-
+    
     // Step 1: Fetch all column names from vitals_features with timeout
     console.log("Fetching column names from vitals_features...");
     let columnResult;
@@ -60,7 +60,7 @@ async function loadWeights() {
       // Initialize with empty array and continue
       columnResult = { rows: [] };
     }
-
+    
     const validColumns = columnResult.rows.map(r => r.column_name);
     console.log("Valid columns in vitals_features:", validColumns);
 
@@ -94,7 +94,7 @@ async function loadWeights() {
     });
 
     console.log(`Loaded ${loaded} valid weights (skipped ${skipped})`);
-
+    
     // If no weights were loaded, add a default intercept
     if (Object.keys(weights).length === 0) {
       console.log("No weights loaded, adding default intercept of 0");
@@ -103,7 +103,7 @@ async function loadWeights() {
     } else {
       weightsLoaded = true;
     }
-
+    
     return weightsLoaded;
   } catch (err) {
     console.error("Unhandled error loading weights from DB:", err);
@@ -127,68 +127,6 @@ async function initializeWeights() {
 // Call this when the server starts
 initializeWeights();
 
-// Function to calculate sepsis risk score - exported for use in other modules
-async function calculateSepsisRisk(id) {
-  if (isNaN(parseInt(id, 10))) {
-    console.warn("Invalid patient ID:", id);
-    return { subject_id: id, risk_score: 0.5, note: "Invalid patient ID" };
-  }
-
-  try {
-    // Make sure weights are loaded
-    if (!weightsLoaded || Object.keys(weights).length <= 1) {
-      console.log(`Weights not loaded for patient ${id}, attempting to load weights now...`);
-      const success = await loadWeights();
-      if (!success) {
-        console.warn(`Failed to load weights, returning default risk score for patient ${id}`);
-        return { subject_id: id, risk_score: 0.5, note: "Using default score - weights not available" };
-      }
-    }
-
-    const featCols = Object.keys(weights).filter(f => f !== "intercept");
-
-    // Handle empty feature list
-    if (featCols.length === 0) {
-      console.warn(`No features available for risk calculation for patient ${id}`);
-      return { subject_id: id, risk_score: 0.5, note: "No features available" };
-    }
-
-    // Query for patient features
-    const queryPromise = pool.query(
-      `SELECT ${featCols.join(", ")} FROM vitals_features WHERE subject_id = $1`,
-      [id]
-    );
-
-    const timeoutPromise = new Promise((_, reject) => {
-      setTimeout(() => {
-        reject(new Error("Database query timed out after 5 seconds"));
-      }, 5000);
-    });
-
-    const { rows } = await Promise.race([queryPromise, timeoutPromise]);
-
-    if (rows.length === 0) {
-      console.warn("No data found for patient ID", id);
-      return { subject_id: id, risk_score: 0.5, note: "Patient not found in vitals_features table" };
-    }
-
-    const features = rows[0];
-
-    // Calculate risk score
-    let z = weights["intercept"] || 0;
-    featCols.forEach(f => {
-      const val = features[f] == null ? 0 : parseFloat(features[f]);
-      z += weights[f] * val;
-    });
-
-    const risk_score = logistic(z);
-    return { subject_id: id, risk_score };
-  } catch (err) {
-    console.error(`Error calculating sepsis risk for patient ${id}:`, err);
-    return { subject_id: id, risk_score: 0.5, note: `Error calculating risk: ${err.message}` };
-  }
-}
-
 // GET /score/:id - Compute patient risk score
 router.get('/score/:id', async (req, res) => {
   const id = parseInt(req.params.id, 10);
@@ -198,11 +136,62 @@ router.get('/score/:id', async (req, res) => {
   }
 
   try {
-    const result = await calculateSepsisRisk(id);
-    console.log("Computed risk score for subject", id, ":", result.risk_score);
-    res.json(result);
+    // Make sure weights are loaded - if not, try loading them
+    if (!weightsLoaded || Object.keys(weights).length <= 1) {
+      console.log("Weights not loaded for patient " + id + ", attempting to load weights now...");
+      const success = await loadWeights();
+      if (!success) {
+        console.warn("Failed to load weights, returning default risk score for patient " + id);
+        return res.json({ subject_id: id, risk_score: 0.5, note: "Using default score - weights not available" });
+      }
+    }
+    
+    const featCols = Object.keys(weights).filter(f => f !== "intercept");
+    console.log("Using features for patient " + id + ":", featCols);
+
+    // Handle empty feature list
+    if (featCols.length === 0) {
+      console.warn("No features available for risk calculation for patient " + id);
+      return res.json({ subject_id: id, risk_score: 0.5, note: "No features available" });
+    }
+
+    // Log the query we're about to execute
+    console.log(`Executing query: SELECT ${featCols.join(", ")} FROM vitals_features WHERE subject_id = ${id}`);
+    
+    // Query with timeout
+    const queryPromise = pool.query(
+      `SELECT ${featCols.join(", ")} FROM vitals_features WHERE subject_id = $1`, 
+      [id]
+    );
+    
+    const timeoutPromise = new Promise((_, reject) => {
+      setTimeout(() => {
+        reject(new Error("Database query timed out after 5 seconds"));
+      }, 5000);
+    });
+    
+    const { rows } = await Promise.race([queryPromise, timeoutPromise]);
+
+    if (rows.length === 0) {
+      console.warn("No data found for patient ID", id);
+      return res.status(404).json({ error: "Patient not found in vitals_features table" });
+    }
+
+    const features = rows[0];
+    console.log("Fetched features for subject " + id + " :", features);
+
+    let z = weights["intercept"] || 0;
+    featCols.forEach(f => {
+      const val = features[f] == null ? 0 : parseFloat(features[f]);
+      z += weights[f] * val;
+    });
+
+    const risk_score = logistic(z);
+    console.log("Computed risk score for subject", id, ":", risk_score);
+
+    res.json({ subject_id: id, risk_score });
   } catch (err) {
-    console.error(`Error in /score/:id for patient ${id}:`, err);
+    console.error("Error in /score/:id for patient " + id + ":", err);
     res.status(500).json({ error: "Server error", details: err.message });
   }
 });
@@ -215,7 +204,7 @@ router.get('/dashboard', async (req, res) => {
       console.log("Loading weights for dashboard...");
       await loadWeights();
     }
-
+    
     // Top 5 patients with highest risk scores
     const top5QueryPromise = pool.query(`
       SELECT id, risk_score
@@ -223,13 +212,13 @@ router.get('/dashboard', async (req, res) => {
       ORDER BY risk_score DESC
       LIMIT 5
     `);
-
+    
     const timeoutPromise = new Promise((_, reject) => {
       setTimeout(() => {
         reject(new Error("Query timed out after 5 seconds"));
       }, 5000);
     });
-
+    
     let top5;
     try {
       top5 = await Promise.race([top5QueryPromise, timeoutPromise]);
@@ -260,14 +249,51 @@ router.get('/dashboard', async (req, res) => {
     // Dynamically calculate scores for the next 3
     const scores3Promise = Promise.all(next3.rows.map(async (r) => {
       try {
-        const result = await calculateSepsisRisk(r.id);
-        return result;
+        if (Object.keys(weights).length <= 1) {
+          console.log("No weights available for subject " + r.id + ", using default");
+          return { subject_id: r.id, risk_score: 0.5, note: "Using default score" };
+        }
+        
+        const featCols = Object.keys(weights).filter(f => f !== "intercept");
+        if (featCols.length === 0) {
+          console.log("No features available for subject " + r.id + ", using default");
+          return { subject_id: r.id, risk_score: 0.5, note: "No features available" };
+        }
+        
+        const queryPromise = pool.query(
+          `SELECT ${featCols.join(", ")} FROM vitals_features WHERE subject_id = $1`, 
+          [r.id]
+        );
+        
+        const timeoutPromise = new Promise((_, reject) => {
+          setTimeout(() => {
+            reject(new Error(`Query for subject ${r.id} timed out after 3 seconds`));
+          }, 3000);
+        });
+        
+        const { rows } = await Promise.race([queryPromise, timeoutPromise]);
+
+        if (!rows.length) {
+          console.warn("Missing vitals for subject", r.id);
+          return { subject_id: r.id, error: "Vitals not found" };
+        }
+
+        const feats = rows[0];
+        let z = weights["intercept"] || 0;
+        featCols.forEach(f => {
+          const v = feats[f] == null ? 0 : parseFloat(feats[f]);
+          z += weights[f] * v;
+        });
+
+        const risk_score = logistic(z);
+        console.log("Live risk score for subject", r.id, ":", risk_score);
+        return { subject_id: r.id, risk_score };
       } catch (err) {
         console.error(`Error calculating score for subject ${r.id}:`, err.message);
         return { subject_id: r.id, error: err.message };
       }
     }));
-
+    
     // Set a global timeout for all score calculations
     const scores3TimeoutPromise = new Promise(resolve => {
       setTimeout(() => {
@@ -275,7 +301,7 @@ router.get('/dashboard', async (req, res) => {
         resolve([]);
       }, 8000);
     });
-
+    
     const scores3 = await Promise.race([scores3Promise, scores3TimeoutPromise]);
 
     res.json({
@@ -284,8 +310,8 @@ router.get('/dashboard', async (req, res) => {
     });
   } catch (err) {
     console.error("Error in /dashboard:", err);
-    res.status(500).json({
-      error: "Server error",
+    res.status(500).json({ 
+      error: "Server error", 
       details: err.message,
       top5: [],
       simulated_arrivals: []
@@ -296,6 +322,5 @@ router.get('/dashboard', async (req, res) => {
 module.exports = {
   scoreRouter: router,
   loadWeights,
-  initializeWeights,  // Export this so it can be called at server startup
-  calculateSepsisRisk // Export this for use in sepsis-alerts route
+  initializeWeights  // Export this so it can be called at server startup
 };

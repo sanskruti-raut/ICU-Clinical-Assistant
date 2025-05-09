@@ -1,20 +1,26 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import { fetchPatientSepsisScore } from '../utils/api';
-import PatientSearch from './PatientSearch';
 
-function PatientList({ patients: initialPatients }) {
+function PatientList({ patients }) {
   const [patientsWithScores, setPatientsWithScores] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [displayedPatients, setDisplayedPatients] = useState([]);
+  const [errorMessage, setErrorMessage] = useState(null);
 
   useEffect(() => {
     const loadSepsisScores = async () => {
-      if (initialPatients && initialPatients.length > 0) {
-        setLoading(true);
+      if (!patients || patients.length === 0) {
+        setPatientsWithScores([]);
+        setLoading(false);
+        return;
+      }
 
+      setLoading(true);
+      setErrorMessage(null);
+
+      try {
         // Create an array of promises to fetch sepsis scores for all patients
-        const scoresPromises = initialPatients.map(async (patient) => {
+        const scoresPromises = patients.map(async (patient) => {
           try {
             // Use the utility function from api.js that handles the correct endpoint
             const response = await fetchPatientSepsisScore(patient.id);
@@ -22,13 +28,15 @@ function PatientList({ patients: initialPatients }) {
             return {
               ...patient,
               sepsisScore: response.risk_score !== null && response.risk_score !== undefined ?
-                response.risk_score : 'N/A'
+                response.risk_score : 'N/A',
+              scoreNote: response.note || null
             };
           } catch (error) {
             console.error(`Error fetching score for patient ${patient.id}:`, error);
             return {
               ...patient,
-              sepsisScore: 'Error'
+              sepsisScore: 'Error',
+              scoreNote: error.message || 'Failed to fetch score'
             };
           }
         });
@@ -37,72 +45,16 @@ function PatientList({ patients: initialPatients }) {
         const patientsData = await Promise.all(scoresPromises);
         console.log("Patients with scores:", patientsData);
         setPatientsWithScores(patientsData);
-        setDisplayedPatients(patientsData);
-        setLoading(false);
-      } else {
-        setPatientsWithScores([]);
-        setDisplayedPatients([]);
+      } catch (error) {
+        console.error("Error loading sepsis scores:", error);
+        setErrorMessage("Failed to load patient risk scores. Please try again later.");
+      } finally {
         setLoading(false);
       }
     };
 
     loadSepsisScores();
-  }, [initialPatients]);
-
-  // Handle a patient found from search
-  const handlePatientFound = (patient) => {
-    // Check if patient is already in the displayed list
-    const patientExists = displayedPatients.some(p => p.id === patient.id);
-    
-    if (!patientExists) {
-      // If we have sepsis scores already, fetch the score for this new patient
-      const getPatientWithScore = async () => {
-        try {
-          // Fetch sepsis score for the new patient
-          const response = await fetchPatientSepsisScore(patient.id);
-          
-          const patientWithScore = {
-            ...patient,
-            sepsisScore: response.risk_score !== null && response.risk_score !== undefined ?
-              response.risk_score : 'N/A'
-          };
-          
-          // Add the patient to the top of the displayed list
-          setDisplayedPatients(prevPatients => 
-            [patientWithScore, ...prevPatients]
-          );
-        } catch (error) {
-          console.error(`Error fetching score for patient ${patient.id}:`, error);
-          
-          const patientWithError = {
-            ...patient,
-            sepsisScore: 'Error'
-          };
-          
-          setDisplayedPatients(prevPatients => 
-            [patientWithError, ...prevPatients]
-          );
-        }
-      };
-      
-      getPatientWithScore();
-    } else {
-      // If patient already exists, highlight it (we could add animation or styling)
-      console.log(`Patient ${patient.id} already in the list`);
-      
-      // Scroll to the patient in the list
-      const patientElement = document.getElementById(`patient-${patient.id}`);
-      if (patientElement) {
-        patientElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
-        
-        // Add a temporary highlight effect
-        patientElement.classList.add('highlight-row');
-        setTimeout(() => {
-          patientElement.classList.remove('highlight-row');
-        }, 2000);
-      }
-    }
-  };
+  }, [patients]);
 
   // Function to truncate text with read more link
   const truncateDiseases = (diseases, maxLength = 100) => {
@@ -123,8 +75,8 @@ function PatientList({ patients: initialPatients }) {
       </span>`;
   };
 
-  // Function to get color for sepsis score
-  const getSepsisScoreColor = (score) => {
+  // Memoize the color calculation function to improve performance
+  const getSepsisScoreColor = useMemo(() => (score) => {
     if (score === 'N/A' || score === 'Error') return '#888';
 
     // Convert score to number if it's a string
@@ -133,7 +85,7 @@ function PatientList({ patients: initialPatients }) {
     if (numScore < 0.3) return '#4caf50';  // Low risk - green
     if (numScore < 0.6) return '#ff9800';  // Medium risk - orange
     return '#f44336';  // High risk - red
-  };
+  }, []);
 
   // Function to format sepsis score display
   const formatSepsisScore = (score) => {
@@ -142,6 +94,21 @@ function PatientList({ patients: initialPatients }) {
     // Format number to percentage with 1 decimal place
     return `${(parseFloat(score) * 100).toFixed(1)}%`;
   };
+
+  // Function to get risk label
+  const getRiskLabel = (score) => {
+    if (score === 'N/A' || score === 'Error') return '';
+    
+    const numScore = typeof score === 'string' ? parseFloat(score) : score;
+    
+    if (numScore < 0.3) return 'Low';
+    if (numScore < 0.6) return 'Medium';
+    return 'High';
+  };
+
+  const hasScoreErrors = useMemo(() => {
+    return patientsWithScores.some(patient => patient.sepsisScore === 'Error');
+  }, [patientsWithScores]);
 
   return (
     <div className="card">
@@ -154,14 +121,34 @@ function PatientList({ patients: initialPatients }) {
         Priority Patients
       </h2>
 
-      <PatientSearch onPatientFound={handlePatientFound} />
+      {errorMessage && (
+        <div className="error-message">
+          <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <circle cx="12" cy="12" r="10"></circle>
+            <line x1="12" y1="8" x2="12" y2="12"></line>
+            <line x1="12" y1="16" x2="12.01" y2="16"></line>
+          </svg>
+          <p>{errorMessage}</p>
+        </div>
+      )}
+
+      {hasScoreErrors && !errorMessage && (
+        <div className="warning-message">
+          <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path>
+            <line x1="12" y1="9" x2="12" y2="13"></line>
+            <line x1="12" y1="17" x2="12.01" y2="17"></line>
+          </svg>
+          <p>Some risk scores could not be loaded. This may be due to missing data or server issues.</p>
+        </div>
+      )}
 
       {loading ? (
         <div className="loading-indicator">
           <div className="spinner"></div>
           <p>Loading patient data...</p>
         </div>
-      ) : displayedPatients.length === 0 ? (
+      ) : patientsWithScores.length === 0 ? (
         <p>No priority patients found.</p>
       ) : (
         <div className="table-responsive">
@@ -171,14 +158,14 @@ function PatientList({ patients: initialPatients }) {
                 <th style={{ width: '12%' }}>ID</th>
                 <th style={{ width: '8%' }}>Age</th>
                 <th style={{ width: '10%' }}>Gender</th>
-                <th style={{ width: '40%' }}>Primary Conditions</th>
-                <th style={{ width: '15%', textAlign: 'center' }}>Sepsis Risk</th>
+                <th style={{ width: '35%' }}>Primary Conditions</th>
+                <th style={{ width: '20%', textAlign: 'center' }}>Sepsis Risk</th>
                 <th style={{ width: '15%', textAlign: 'center' }}>Action</th>
               </tr>
             </thead>
             <tbody>
-              {displayedPatients.map((patient) => (
-                <tr key={patient.id} id={`patient-${patient.id}`}>
+              {patientsWithScores.map((patient) => (
+                <tr key={patient.id} className={patient.sepsisScore > 0.7 ? 'high-risk-row' : ''}>
                   <td>
                     <span className="patient-id">{patient.id}</span>
                   </td>
@@ -192,20 +179,31 @@ function PatientList({ patients: initialPatients }) {
                   </td>
                   <td dangerouslySetInnerHTML={{ __html: truncateDiseases(patient.diseases) }}></td>
                   <td style={{ textAlign: 'center' }}>
-                    <div
-                      className="sepsis-score"
-                      style={{
-                        backgroundColor: getSepsisScoreColor(patient.sepsisScore) + '20',
-                        color: getSepsisScoreColor(patient.sepsisScore),
-                        padding: '4px 8px',
-                        borderRadius: '4px',
-                        fontWeight: 'bold',
-                        display: 'inline-block',
-                        minWidth: '70px',
-                        textAlign: 'center'
-                      }}
-                    >
-                      {formatSepsisScore(patient.sepsisScore)}
+                    <div className="sepsis-score-container">
+                      <div
+                        className={`sepsis-score ${patient.sepsisScore === 'Error' ? 'error' : ''}`}
+                        style={{
+                          backgroundColor: getSepsisScoreColor(patient.sepsisScore) + '20',
+                          color: getSepsisScoreColor(patient.sepsisScore)
+                        }}
+                        title={patient.scoreNote || ''}
+                      >
+                        {formatSepsisScore(patient.sepsisScore)}
+                        {patient.sepsisScore !== 'N/A' && patient.sepsisScore !== 'Error' && (
+                          <span className="risk-label">
+                            {getRiskLabel(patient.sepsisScore)} Risk
+                          </span>
+                        )}
+                      </div>
+                      {patient.scoreNote && (
+                        <div className="score-note-indicator" title={patient.scoreNote}>
+                          <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                            <circle cx="12" cy="12" r="10"></circle>
+                            <line x1="12" y1="16" x2="12" y2="12"></line>
+                            <line x1="12" y1="8" x2="12.01" y2="8"></line>
+                          </svg>
+                        </div>
+                      )}
                     </div>
                   </td>
                   <td style={{ textAlign: 'center' }}>
@@ -245,6 +243,12 @@ function PatientList({ patients: initialPatients }) {
           color: #666;
           white-space: nowrap;
         }
+        .high-risk-row {
+          background-color: rgba(244, 67, 54, 0.05);
+        }
+        .high-risk-row:hover {
+          background-color: rgba(244, 67, 54, 0.1) !important;
+        }
         .patient-id {
           font-weight: 500;
           color: #1976d2;
@@ -275,9 +279,36 @@ function PatientList({ patients: initialPatients }) {
           font-weight: 500;
           text-align: center;
         }
+        .sepsis-score-container {
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          gap: 8px;
+        }
         .sepsis-score {
-          min-width: 70px;
-          text-align: center;
+          padding: 6px 12px;
+          border-radius: 4px;
+          font-weight: bold;
+          display: inline-flex;
+          flex-direction: column;
+          align-items: center;
+          min-width: 80px;
+          transition: transform 0.2s;
+        }
+        .sepsis-score:hover {
+          transform: translateY(-2px);
+        }
+        .sepsis-score.error {
+          cursor: help;
+        }
+        .risk-label {
+          font-size: 0.7rem;
+          opacity: 0.8;
+          margin-top: 3px;
+        }
+        .score-note-indicator {
+          color: #888;
+          cursor: help;
         }
         .read-more:hover {
           text-decoration: none;
@@ -297,19 +328,33 @@ function PatientList({ patients: initialPatients }) {
           animation: spin 1s linear infinite;
           margin-bottom: 10px;
         }
+        .error-message, .warning-message {
+          display: flex;
+          align-items: center;
+          gap: 10px;
+          padding: 12px 16px;
+          margin-bottom: 16px;
+          border-radius: 4px;
+        }
+        .error-message {
+          background-color: #ffebee;
+          color: #c62828;
+          border-left: 4px solid #c62828;
+        }
+        .warning-message {
+          background-color: #fff8e1;
+          color: #ff8f00;
+          border-left: 4px solid #ff8f00;
+        }
+        .error-message svg, .warning-message svg {
+          flex-shrink: 0;
+        }
         @keyframes spin {
           0% { transform: rotate(0deg); }
           100% { transform: rotate(360deg); }
         }
         .btn {
           white-space: nowrap;
-        }
-        .highlight-row {
-          animation: highlight 2s;
-        }
-        @keyframes highlight {
-          0% { background-color: rgba(25, 118, 210, 0.2); }
-          100% { background-color: transparent; }
         }
       `}</style>
     </div>

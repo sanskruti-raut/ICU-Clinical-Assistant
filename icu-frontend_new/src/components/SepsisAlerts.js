@@ -1,19 +1,20 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
 
-function AlertsPanel({ alerts }) {
+function SepsisAlerts({ alerts }) {
   // If no alerts or empty array, show no alerts message
-  if (!alerts.alerts || alerts.alerts.length === 0) {
+  if (!alerts || !alerts.length) {
     return (
       <div className="card">
         <h2 className="card-title">
           <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#f44336" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ marginRight: '8px' }}>
-            <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path>
-            <path d="M13.73 21a2 2 0 0 1-3.46 0"></path>
+            <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path>
+            <line x1="12" y1="9" x2="12" y2="13"></line>
+            <line x1="12" y1="17" x2="12.01" y2="17"></line>
           </svg>
-          Alerts for Heart Rate
+          Sepsis Risk Alerts
         </h2>
-        <p className="no-alerts-message">No active heart rate alerts at this time.</p>
+        <p className="no-alerts-message">No sepsis risk alerts at this time.</p>
       </div>
     );
   }
@@ -22,42 +23,42 @@ function AlertsPanel({ alerts }) {
     <div className="card">
       <h2 className="card-title">
         <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#f44336" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ marginRight: '8px' }}>
-          <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path>
-          <path d="M13.73 21a2 2 0 0 1-3.46 0"></path>
+            <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path>
+            <line x1="12" y1="9" x2="12" y2="13"></line>
+            <line x1="12" y1="17" x2="12.01" y2="17"></line>
         </svg>
-        Alerts for Heart Rate
+        Sepsis Risk Alerts
       </h2>
       
       <div className="sepsis-alerts-container">
-        {alerts.alerts.map((alert, index) => {
-          // Extract patient ID and heart rate value
-          const patientIdMatch = alert.match(/Patient\s+(\d+)/);
-          const patientId = patientIdMatch ? patientIdMatch[1] : '';
-          
-          const heartRateMatch = alert.match(/Heart Rate = (\d+)/);
-          const heartRate = heartRateMatch ? heartRateMatch[1] : '';
+        {alerts.map((alert, index) => {
+          const riskLevel = getRiskLevel(alert.risk_score);
           
           return (
             <div 
               key={index} 
-              className="alert alert-danger"
+              className={`alert alert-${riskLevel.className}`}
             >
               <div className="alert-icon">
                 <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M20.42 4.58a5.4 5.4 0 0 0-7.65 0l-.77.78-.77-.78a5.4 5.4 0 0 0-7.65 0C1.46 6.7 1.33 10.28 4 13l8 8 8-8c2.67-2.72 2.54-6.3.42-8.42z"></path>
+                  <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path>
+                  <line x1="12" y1="9" x2="12" y2="13"></line>
+                  <line x1="12" y1="17" x2="12.01" y2="17"></line>
                 </svg>
               </div>
               
               <div className="alert-content">
                 <div className="alert-title">
-                  <span className="risk-badge">{heartRate}</span>
-                  <span className="risk-level">High Heart Rate</span>
+                  <span className="risk-badge">{formatRiskScore(alert.risk_score)}</span>
+                  <span className="risk-level">{riskLevel.label} Risk</span>
                 </div>
                 <div className="alert-details">
-                  Patient <Link to={`/patient/${patientId}`} className="patient-link">{patientId}</Link>
-                  <span className="timestamp">
-                    {new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
-                  </span>
+                  Patient <Link to={`/patient/${alert.subject_id}`} className="patient-link">{alert.subject_id}</Link>
+                  {alert.timestamp && 
+                    <span className="timestamp">
+                      {new Date(alert.timestamp).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
+                    </span>
+                  }
                 </div>
               </div>
             </div>
@@ -80,8 +81,6 @@ function AlertsPanel({ alerts }) {
           box-shadow: 0 2px 5px rgba(0,0,0,0.1);
           animation: fadeIn 0.5s ease-in-out;
           position: relative;
-          background-color: #ffebee;
-          border-left: 4px solid #f44336;
         }
         
         .alert-danger {
@@ -89,11 +88,33 @@ function AlertsPanel({ alerts }) {
           border-left: 4px solid #f44336;
         }
         
+        .alert-warning {
+          background-color: #fff8e1;
+          border-left: 4px solid #ff9800;
+        }
+        
+        .alert-success {
+          background-color: #e8f5e9;
+          border-left: 4px solid #4caf50;
+        }
+        
         .alert-icon {
           display: flex;
           margin-right: 12px;
           color: #f44336;
           flex-shrink: 0;
+        }
+        
+        .alert-danger .alert-icon {
+          color: #f44336;
+        }
+        
+        .alert-warning .alert-icon {
+          color: #ff9800;
+        }
+        
+        .alert-success .alert-icon {
+          color: #4caf50;
         }
         
         .alert-content {
@@ -157,4 +178,20 @@ function AlertsPanel({ alerts }) {
   );
 }
 
-export default AlertsPanel;
+// Helper function to format risk score as percentage
+function formatRiskScore(score) {
+  return `${(score * 100).toFixed(1)}%`;
+}
+
+// Helper function to get risk level info
+function getRiskLevel(score) {
+  if (score >= 0.7) {
+    return { label: 'High', className: 'danger' };
+  } else if (score >= 0.4) {
+    return { label: 'Medium', className: 'warning' };
+  } else {
+    return { label: 'Low', className: 'success' };
+  }
+}
+
+export default SepsisAlerts;
