@@ -86,7 +86,7 @@ function checkForAlert(vital) {
   // only care about heart‐rate here
   if (vital.label === 'Heart Rate' && vital.valuenum > 90) {
     const alertMsg = `ALERT: High Heart Rate = ${vital.valuenum} for Patient ${vital.subject_id}`;
-    
+
     // publish to SNS
     try {
         sns.publish({
