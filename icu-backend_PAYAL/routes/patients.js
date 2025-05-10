@@ -88,4 +88,43 @@ router.get('/patient-overview/:id', async (req, res) => {
   }
 });
 
+// DELETE /api/delete-patient/:id - Delete a patient from the system
+router.delete('/delete-patient/:id', async (req, res) => {
+  const id = req.params.id;
+  
+  try {
+    // Start a transaction to ensure data consistency
+    await pool.query('BEGIN');
+    
+    // Delete from priority_patients table
+    const deleteResult = await pool.query(`
+      DELETE FROM priority_patients
+      WHERE id = $1
+      RETURNING *
+    `, [id]);
+    
+    if (deleteResult.rows.length === 0) {
+      await pool.query('ROLLBACK');
+      return res.status(404).json({ error: "Patient not found" });
+    }
+    
+    // Note: You might want to delete related data from other tables as well
+    // For example, if you want to delete vitals data:
+    // await pool.query('DELETE FROM vitals WHERE subject_id = $1', [id]);
+    // await pool.query('DELETE FROM icustays WHERE subject_id = $1', [id]);
+    // await pool.query('DELETE FROM vitals_features WHERE subject_id = $1', [id]);
+    
+    // Commit the transaction
+    await pool.query('COMMIT');
+    
+    console.log(`Patient ${id} deleted successfully`);
+    res.json({ message: `Patient ${id} deleted successfully` });
+    
+  } catch (err) {
+    await pool.query('ROLLBACK');
+    console.error("Error deleting patient:", err);
+    res.status(500).json({ error: "Server error while deleting patient" });
+  }
+});
+
 module.exports = router;

@@ -1,20 +1,27 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { Link } from 'react-router-dom';
-import { fetchPatientSepsisScore } from '../utils/api';
+import { fetchPatientSepsisScore, deletePatient } from '../utils/api';
 import PatientSearch from './PatientSearch';
 
-function PatientList({ patients: initialPatients }) {
+function PatientList({ patients }) {
   const [patientsWithScores, setPatientsWithScores] = useState([]);
   const [loading, setLoading] = useState(true);
   const [displayedPatients, setDisplayedPatients] = useState([]);
 
   useEffect(() => {
     const loadSepsisScores = async () => {
-      if (initialPatients && initialPatients.length > 0) {
-        setLoading(true);
+      if (!patients || patients.length === 0) {
+        setPatientsWithScores([]);
+        setDisplayedPatients([]);
+        setLoading(false);
+        return;
+      }
 
+      setLoading(true);
+
+      try {
         // Create an array of promises to fetch sepsis scores for all patients
-        const scoresPromises = initialPatients.map(async (patient) => {
+        const scoresPromises = patients.map(async (patient) => {
           try {
             // Use the utility function from api.js that handles the correct endpoint
             const response = await fetchPatientSepsisScore(patient.id);
@@ -22,13 +29,15 @@ function PatientList({ patients: initialPatients }) {
             return {
               ...patient,
               sepsisScore: response.risk_score !== null && response.risk_score !== undefined ?
-                response.risk_score : 'N/A'
+                response.risk_score : 'N/A',
+              scoreNote: response.note || null
             };
           } catch (error) {
             console.error(`Error fetching score for patient ${patient.id}:`, error);
             return {
               ...patient,
-              sepsisScore: 'Error'
+              sepsisScore: 'Error',
+              scoreNote: error.message || 'Failed to fetch score'
             };
           }
         });
@@ -38,56 +47,52 @@ function PatientList({ patients: initialPatients }) {
         console.log("Patients with scores:", patientsData);
         setPatientsWithScores(patientsData);
         setDisplayedPatients(patientsData);
-        setLoading(false);
-      } else {
-        setPatientsWithScores([]);
-        setDisplayedPatients([]);
+      } catch (error) {
+        console.error("Error loading sepsis scores:", error);
+      } finally {
         setLoading(false);
       }
     };
 
     loadSepsisScores();
-  }, [initialPatients]);
+  }, [patients]);
 
-  // Handle a patient found from search
-  const handlePatientFound = (patient) => {
+  // Handle patient found from search
+  const handlePatientFound = async (patient) => {
     // Check if patient is already in the displayed list
     const patientExists = displayedPatients.some(p => p.id === patient.id);
     
     if (!patientExists) {
-      // If we have sepsis scores already, fetch the score for this new patient
-      const getPatientWithScore = async () => {
-        try {
-          // Fetch sepsis score for the new patient
-          const response = await fetchPatientSepsisScore(patient.id);
-          
-          const patientWithScore = {
-            ...patient,
-            sepsisScore: response.risk_score !== null && response.risk_score !== undefined ?
-              response.risk_score : 'N/A'
-          };
-          
-          // Add the patient to the top of the displayed list
-          setDisplayedPatients(prevPatients => 
-            [patientWithScore, ...prevPatients]
-          );
-        } catch (error) {
-          console.error(`Error fetching score for patient ${patient.id}:`, error);
-          
-          const patientWithError = {
-            ...patient,
-            sepsisScore: 'Error'
-          };
-          
-          setDisplayedPatients(prevPatients => 
-            [patientWithError, ...prevPatients]
-          );
-        }
-      };
-      
-      getPatientWithScore();
+      try {
+        // Fetch sepsis score for the new patient
+        const response = await fetchPatientSepsisScore(patient.id);
+        
+        const patientWithScore = {
+          ...patient,
+          sepsisScore: response.risk_score !== null && response.risk_score !== undefined ?
+            response.risk_score : 'N/A',
+          scoreNote: response.note || null
+        };
+        
+        // Add the patient to the top of the displayed list
+        setDisplayedPatients(prevPatients => [patientWithScore, ...prevPatients]);
+        
+        // Also update the main patients list
+        setPatientsWithScores(prevPatients => [patientWithScore, ...prevPatients]);
+      } catch (error) {
+        console.error(`Error fetching score for patient ${patient.id}:`, error);
+        
+        const patientWithError = {
+          ...patient,
+          sepsisScore: 'Error',
+          scoreNote: error.message || 'Failed to fetch score'
+        };
+        
+        setDisplayedPatients(prevPatients => [patientWithError, ...prevPatients]);
+        setPatientsWithScores(prevPatients => [patientWithError, ...prevPatients]);
+      }
     } else {
-      // If patient already exists, highlight it (we could add animation or styling)
+      // If patient already exists, highlight it
       console.log(`Patient ${patient.id} already in the list`);
       
       // Scroll to the patient in the list
@@ -100,6 +105,32 @@ function PatientList({ patients: initialPatients }) {
         setTimeout(() => {
           patientElement.classList.remove('highlight-row');
         }, 2000);
+      }
+    }
+  };
+
+  // Handle patient deletion
+  const handleDeletePatient = async (patientId) => {
+    const confirmDelete = window.confirm('Do you confirm you want to delete this patient?');
+    
+    if (confirmDelete) {
+      try {
+        // Call API to delete patient
+        await deletePatient(patientId);
+        
+        // Remove patient from local state
+        setDisplayedPatients(prevPatients => 
+          prevPatients.filter(patient => patient.id !== patientId)
+        );
+        setPatientsWithScores(prevPatients => 
+          prevPatients.filter(patient => patient.id !== patientId)
+        );
+        
+        // Show success message (optional)
+        console.log(`Patient ${patientId} deleted successfully`);
+      } catch (error) {
+        console.error(`Error deleting patient ${patientId}:`, error);
+        alert('Failed to delete patient. Please try again.');
       }
     }
   };
@@ -123,8 +154,8 @@ function PatientList({ patients: initialPatients }) {
       </span>`;
   };
 
-  // Function to get color for sepsis score
-  const getSepsisScoreColor = (score) => {
+  // Memoize the color calculation function to improve performance
+  const getSepsisScoreColor = useMemo(() => (score) => {
     if (score === 'N/A' || score === 'Error') return '#888';
 
     // Convert score to number if it's a string
@@ -133,7 +164,7 @@ function PatientList({ patients: initialPatients }) {
     if (numScore < 0.3) return '#4caf50';  // Low risk - green
     if (numScore < 0.6) return '#ff9800';  // Medium risk - orange
     return '#f44336';  // High risk - red
-  };
+  }, []);
 
   // Function to format sepsis score display
   const formatSepsisScore = (score) => {
@@ -141,6 +172,17 @@ function PatientList({ patients: initialPatients }) {
 
     // Format number to percentage with 1 decimal place
     return `${(parseFloat(score) * 100).toFixed(1)}%`;
+  };
+
+  // Function to get risk label
+  const getRiskLabel = (score) => {
+    if (score === 'N/A' || score === 'Error') return '';
+    
+    const numScore = typeof score === 'string' ? parseFloat(score) : score;
+    
+    if (numScore < 0.3) return 'Low';
+    if (numScore < 0.6) return 'Medium';
+    return 'High';
   };
 
   return (
@@ -170,15 +212,15 @@ function PatientList({ patients: initialPatients }) {
               <tr>
                 <th style={{ width: '12%' }}>ID</th>
                 <th style={{ width: '8%' }}>Age</th>
-                <th style={{ width: '10%' }}>Gender</th>
-                <th style={{ width: '40%' }}>Primary Conditions</th>
-                <th style={{ width: '15%', textAlign: 'center' }}>Sepsis Risk</th>
-                <th style={{ width: '15%', textAlign: 'center' }}>Action</th>
+                <th style={{ width: '8%' }}>Gender</th>
+                <th style={{ width: '32%' }}>Primary Conditions</th>
+                <th style={{ width: '18%', textAlign: 'center' }}>Sepsis Risk</th>
+                <th style={{ width: '22%', textAlign: 'center' }}>Action</th>
               </tr>
             </thead>
             <tbody>
               {displayedPatients.map((patient) => (
-                <tr key={patient.id} id={`patient-${patient.id}`}>
+                <tr key={patient.id} id={`patient-${patient.id}`} className={patient.sepsisScore > 0.7 ? 'high-risk-row' : ''}>
                   <td>
                     <span className="patient-id">{patient.id}</span>
                   </td>
@@ -192,32 +234,48 @@ function PatientList({ patients: initialPatients }) {
                   </td>
                   <td dangerouslySetInnerHTML={{ __html: truncateDiseases(patient.diseases) }}></td>
                   <td style={{ textAlign: 'center' }}>
-                    <div
-                      className="sepsis-score"
-                      style={{
-                        backgroundColor: getSepsisScoreColor(patient.sepsisScore) + '20',
-                        color: getSepsisScoreColor(patient.sepsisScore),
-                        padding: '4px 8px',
-                        borderRadius: '4px',
-                        fontWeight: 'bold',
-                        display: 'inline-block',
-                        minWidth: '70px',
-                        textAlign: 'center'
-                      }}
-                    >
-                      {formatSepsisScore(patient.sepsisScore)}
+                    <div className="sepsis-score-container">
+                      <div
+                        className={`sepsis-score ${patient.sepsisScore === 'Error' ? 'error' : ''}`}
+                        style={{
+                          backgroundColor: getSepsisScoreColor(patient.sepsisScore) + '20',
+                          color: getSepsisScoreColor(patient.sepsisScore)
+                        }}
+                        title={patient.scoreNote || ''}
+                      >
+                        {formatSepsisScore(patient.sepsisScore)}
+                        {patient.sepsisScore !== 'N/A' && patient.sepsisScore !== 'Error' && (
+                          <span className="risk-label">
+                            {getRiskLabel(patient.sepsisScore)} Risk
+                          </span>
+                        )}
+                      </div>
                     </div>
                   </td>
                   <td style={{ textAlign: 'center' }}>
-                    <Link to={`/patient/${patient.id}`}>
-                      <button className="btn btn-primary">
-                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ marginRight: '4px' }}>
-                          <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
-                          <circle cx="12" cy="12" r="3"></circle>
+                    <div className="action-buttons">
+                      <Link to={`/patient/${patient.id}`}>
+                        <button className="btn btn-primary btn-small">
+                          <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ marginRight: '3px' }}>
+                            <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
+                            <circle cx="12" cy="12" r="3"></circle>
+                          </svg>
+                          View
+                        </button>
+                      </Link>
+                      <button 
+                        className="btn btn-danger btn-small"
+                        onClick={() => handleDeletePatient(patient.id)}
+                      >
+                        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ marginRight: '3px' }}>
+                          <polyline points="3 6 5 6 21 6"></polyline>
+                          <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+                          <line x1="10" y1="11" x2="10" y2="17"></line>
+                          <line x1="14" y1="11" x2="14" y2="17"></line>
                         </svg>
-                        View
+                        Delete
                       </button>
-                    </Link>
+                    </div>
                   </td>
                 </tr>
               ))}
@@ -244,6 +302,12 @@ function PatientList({ patients: initialPatients }) {
           font-weight: 500;
           color: #666;
           white-space: nowrap;
+        }
+        .high-risk-row {
+          background-color: rgba(244, 67, 54, 0.05);
+        }
+        .high-risk-row:hover {
+          background-color: rgba(244, 67, 54, 0.1) !important;
         }
         .patient-id {
           font-weight: 500;
@@ -275,9 +339,48 @@ function PatientList({ patients: initialPatients }) {
           font-weight: 500;
           text-align: center;
         }
+        .sepsis-score-container {
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          gap: 8px;
+        }
         .sepsis-score {
-          min-width: 70px;
-          text-align: center;
+          padding: 6px 12px;
+          border-radius: 4px;
+          font-weight: bold;
+          display: inline-flex;
+          flex-direction: column;
+          align-items: center;
+          min-width: 80px;
+          transition: transform 0.2s;
+        }
+        .sepsis-score:hover {
+          transform: translateY(-2px);
+        }
+        .sepsis-score.error {
+          cursor: help;
+        }
+        .risk-label {
+          font-size: 0.7rem;
+          opacity: 0.8;
+          margin-top: 3px;
+        }
+        .action-buttons {
+          display: flex;
+          gap: 8px;
+          justify-content: center;
+        }
+        .btn-small {
+          padding: 6px 10px;
+          font-size: 0.85rem;
+        }
+        .btn-danger {
+          background-color: #f44336;
+          color: white;
+        }
+        .btn-danger:hover {
+          background-color: #d32f2f;
         }
         .read-more:hover {
           text-decoration: none;

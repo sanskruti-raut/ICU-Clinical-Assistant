@@ -5,11 +5,32 @@ const api = axios.create({
   baseURL: '/api',
 });
 
+// Add request interceptor to include token
+api.interceptors.request.use(
+  config => {
+    const token = localStorage.getItem('token');
+    if (token) {
+      config.headers.Authorization = `Bearer ${token}`;
+    }
+    return config;
+  },
+  error => {
+    return Promise.reject(error);
+  }
+);
+
 // Add response interceptor for better error handling
 api.interceptors.response.use(
   response => response,
   error => {
     console.error('API Error:', error);
+    
+    // If 401 Unauthorized, redirect to login
+    if (error.response?.status === 401) {
+      localStorage.removeItem('token');
+      window.location.href = '/login';
+    }
+    
     // Add more context to the error
     if (error.response) {
       error.message = `Server responded with error ${error.response.status}: ${error.response.data.error || error.message}`;
@@ -119,6 +140,18 @@ export const fetchAnalyticsSummary = async () => {
   } catch (error) {
     console.error('Error fetching analytics summary:', error);
     return null;
+  }
+};
+
+export const deletePatient = async (patientId) => {
+  try {
+    const response = await api.delete(`/delete-patient/${patientId}`);
+    // Also remove from cache
+    sepsisScoreCache.delete(patientId);
+    return response.data;
+  } catch (error) {
+    console.error(`Error deleting patient ${patientId}:`, error);
+    throw error;
   }
 };
 

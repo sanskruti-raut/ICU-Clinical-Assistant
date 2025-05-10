@@ -20,6 +20,11 @@ function AnalyticsSummary({ analytics }) {
     );
   }
 
+  // Safely handle values that might be undefined
+  const avgStayLength = analytics.avg_stay_length ? parseFloat(analytics.avg_stay_length).toFixed(2) : '0.00';
+  const totalStays = analytics.total_stays ? Number(analytics.total_stays).toLocaleString() : '0';
+  const totalVitals = analytics.total_vitals ? Number(analytics.total_vitals).toLocaleString() : '0';
+
   return (
     <div className="card">
       <h2 className="card-title">
@@ -41,7 +46,7 @@ function AnalyticsSummary({ analytics }) {
             </svg>
           </div>
           <h3>Average Stay Length</h3>
-          <div className="analytics-value">{analytics.avg_stay_length}</div>
+          <div className="analytics-value">{avgStayLength}</div>
           <div className="analytics-unit">days</div>
         </div>
         <div className="analytics-item">
@@ -54,7 +59,7 @@ function AnalyticsSummary({ analytics }) {
             </svg>
           </div>
           <h3>Total Stays</h3>
-          <div className="analytics-value">{analytics.total_stays.toLocaleString()}</div>
+          <div className="analytics-value">{totalStays}</div>
           <div className="analytics-unit">patients</div>
         </div>
         <div className="analytics-item">
@@ -64,7 +69,7 @@ function AnalyticsSummary({ analytics }) {
             </svg>
           </div>
           <h3>Total Vitals Recorded</h3>
-          <div className="analytics-value">{analytics.total_vitals.toLocaleString()}</div>
+          <div className="analytics-value">{totalVitals}</div>
           <div className="analytics-unit">measurements</div>
         </div>
       </div>
