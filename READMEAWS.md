@@ -81,7 +81,7 @@ A Node.js + PostgreSQL backend that serves ICU vitals data via a REST API, fully
 
 ---
 
-##  AWS Deployment via CloudFormation
+##  AWS Deployment via CloudFormation template attached in this repo and named -> cloudFormationVitalWatch.yaml
 
 ### Prerequisites
 
@@ -124,18 +124,21 @@ Outputs include VPC ID, EC2 Instance ID, and RDS Endpoint.
 ##  Connect & Run on EC2
 
 1. In the AWS Console, navigate to **Systems Manager → Session Manager**, and start a session on the EC2 instance.
-2. Clone and start the app:
+2. Download the preprocessed postgres sql dump from google drive link attached-> https://drive.google.com/file/d/1vts4-6_f7Dk_m6FXyTDHi8UT05RZylq0/view?usp=sharing
+3. Clone and start the app:
 
    ```bash
    cd /home/ubuntu
-   git clone https://github.com/<your-org>/ICU-Clinical-Assistant.git
-   cd ICU-Clinical-Assistant
+   git clone https://github.com/sanskruti-raut/ICU-Clinical-Assistant.git
+   cd ICU-Clinical-Assistant/icu-backend_PAYAL/
    cp .env.example .env
    # Edit .env: set DB_HOST to the RDS endpoint from CloudFormation outputs
    npm install
    npm start
+
+   once all the modules are loaded run the app by node index.js
    ```
-3. The server will be listening on `localhost:3000` inside the instance.
+4. The server will be listening on `localhost:3000` inside the instance.
 
 ---
 
