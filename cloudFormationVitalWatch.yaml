@@ -226,3 +226,82 @@ Outputs:
   RDSHost:
     Value: !GetAtt MyRDS.Endpoint.Address
     Description: RDS endpoint
+
+  Resources:
+
+  # --- Application Load Balancer ---
+  AppLoadBalancer:
+    Type: AWS::ElasticLoadBalancingV2::LoadBalancer
+    Properties:
+      Name: !Sub "${AWS::StackName}-ALB"
+      Scheme: internet-facing
+      Subnets:
+        - !Ref PublicSubnetA
+        - !Ref PublicSubnetB
+      SecurityGroups:
+        - !Ref AlbSecurityGroup
+      Type: application
+
+  AlbTargetGroup:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Properties:
+      Name: !Sub "${AWS::StackName}-TG"
+      Port: 3000
+      Protocol: HTTP
+      VpcId: !Ref VpcId
+      HealthCheckProtocol: HTTP
+      HealthCheckPath: /health
+      HealthCheckIntervalSeconds: 30
+      Matcher:
+        HttpCode: 200
+
+  AlbListener:
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    Properties:
+      LoadBalancerArn: !Ref AppLoadBalancer
+      Port: 443
+      Protocol: HTTPS
+      Certificates:
+        - CertificateArn: !Ref AcmCertificateArn
+      DefaultActions:
+        - Type: forward
+          TargetGroupArn: !Ref AlbTargetGroup
+
+  # --- Launch Configuration for ASG ---
+  WebServerLaunchConfig:
+    Type: AWS::AutoScaling::LaunchConfiguration
+    Properties:
+      ImageId: ami-0123456789abcdef0     # your Node.js AMI
+      InstanceType: t3.micro
+      SecurityGroups:
+        - !Ref Ec2SecurityGroup
+      IamInstanceProfile: !Ref Ec2InstanceProfile
+      UserData:
+        Fn::Base64: !Sub |
+          #!/bin/bash
+          yum update -y
+          # install Docker / Node.js or pull container, etc.
+          # fetch model weights from S3
+          aws s3 cp s3://${ModelBucket}/weights.tar.gz /opt/weights/
+          # start your Node server
+          pm2 start /srv/app/index.js
+
+  # --- Auto Scaling Group ---
+  WebServerAutoScalingGroup:
+    Type: AWS::AutoScaling::AutoScalingGroup
+    Properties:
+      VPCZoneIdentifier:
+        - !Ref PrivateSubnetA
+        - !Ref PrivateSubnetB
+      LaunchConfigurationName: !Ref WebServerLaunchConfig
+      MinSize: 1
+      MaxSize: 3
+      DesiredCapacity: 2
+      TargetGroupARNs:
+        - !Ref AlbTargetGroup
+      HealthCheckType: ELB
+      HealthCheckGracePeriod: 60
+      Tags:
+        - Key: Name
+          Value: !Sub "${AWS::StackName}-web"
+          PropagateAtLaunch: true
