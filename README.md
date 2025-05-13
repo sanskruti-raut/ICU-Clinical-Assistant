@@ -86,7 +86,7 @@ psql -U your-database-user -d your-database-name < add_test_user.sql
 
 Start the backend server:
 ```bash
-npm start
+node index.js
 ```
 
 ### 3. Frontend Setup
@@ -103,7 +103,7 @@ npm install
 
 Start the development server:
 ```bash
-npm start
+npm run build
 ```
 
 The application will be available at http://54.241.44.20:3000/
