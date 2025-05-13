@@ -1,13 +1,11 @@
 # ICU Patient Monitoring System
-Graduate Project - Healthcare IT
 
 ## Team Members
-[Add your team member names here]
+Sanskruti Raut, Niveditha Madegowda, Payal Chatterjee
 
 ## Project Overview
 A real-time ICU monitoring system that tracks patient vitals, predicts sepsis risk using machine learning, and sends critical alerts via AWS SNS.
 
-## Quick Start
 
 ### Prerequisites
 - Node.js 14+
