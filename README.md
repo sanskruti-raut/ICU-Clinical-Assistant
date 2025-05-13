@@ -218,31 +218,6 @@ The system monitors for:
 
 ## Development
 
-### Backend Development
-```bash
-cd icu-backend_PAYAL
-npm start
-```
-
-### Frontend Development
-```bash
-cd icu-frontend_new
-npm start
-```
-
-### Testing
-To test authentication:
-```bash
-node test_auth.js
-```
-
-To create password hashes:
-```bash
-node create_test_hash.js
-```
-
-## Production Deployment
-
 ### Build Frontend
 ```bash
 cd icu-frontend_new
