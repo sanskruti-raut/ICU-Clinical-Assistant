@@ -1,95 +1,139 @@
-# ICU Clinical Assistant
-EE_547 Final Project
+# ICU Patient Monitoring System
+Graduate Project - Healthcare IT
 
-A comprehensive ICU patient monitoring dashboard system with real-time alerts, patient overview, and analytics.
+## Team Members
+[Add your team member names here]
 
-## Project Structure
+## Project Overview
+A real-time ICU monitoring system that tracks patient vitals, predicts sepsis risk using machine learning, and sends critical alerts via AWS SNS.
 
-The project consists of two main parts:
-
-1. **Backend (icu-backend)**: Express.js server that provides API endpoints
-2. **Frontend (icu-frontend)**: React application for the user interface
-
-## Features
-
-- **ICU Patient Overview Grid**: View all active ICU patients with key summary information
-- **Real-Time Alerts Feed**: Scrollable feed showing critical alerts like "HR critical" or "Sepsis risk > 80%"
-- **ICU Analytics Summary**: Dashboard-style metrics with statistics
-- **Priority Patient List**: Sorted by highest risk, flags patients with unacknowledged alerts
-
-## Getting Started
+## Quick Start
 
 ### Prerequisites
+- Node.js 14+
+- PostgreSQL
+- AWS Account (for SNS alerts)
 
-- Node.js (v14 or higher)
-- npm or yarn
-
-### Setup and Installation
-
-#### Backend
-
-1. Navigate to the backend directory:
-   ```
-   cd icu-backend
+### Setup
+1. **Clone repository**
+   ```bash
+   git clone <repo-url>
    ```
 
-2. Install dependencies:
-   ```
+2. **Backend setup**
+   ```bash
+   cd icu-backend_PAYAL
    npm install
-   ```
-
-3. Start the backend server:
-   ```
-   npm start
-   ```
    
-   The server will run on port 3001 by default.
-
-#### Frontend
-
-1. Navigate to the frontend directory:
+   # Create .env file with:
+   DB_HOST=localhost
+   DB_USER=postgres
+   DB_PASSWORD=your-password
+   DB_NAME=icu_monitor
+   JWT_SECRET=your-secret
+   PORT=3000
+   
+   # Initialize database
+   psql -U postgres -d icu_monitor < init_users_table.sql
+   
+   node index.js
    ```
-   cd icu-frontend
-   ```
 
-2. Install dependencies:
-   ```
+3. **Frontend setup**
+   ```bash
+   cd ../icu-frontend_new
    npm install
+   npm run build
    ```
 
-3. Start the development server:
-   ```
-   npm start
-   ```
-   
-   The application will open in your browser at http://localhost:3000
+### Test Credentials
+- **Admin**: admin@vitalwatch.com / password123
+- **Doctor**: doctor@vitalwatch.com / password123
+- **Nurse**: nurse@vitalwatch.com / password123
+
+## Key Features
+- Real-time vital signs monitoring
+- Sepsis risk prediction (logistic regression)
+- AWS SNS alerts for critical conditions
+- Role-based authentication (JWT)
+- Patient management dashboard
+
+## Architecture
+```
+Frontend (React)
+    ↓
+Backend (Express.js)
+    ↓
+Database (PostgreSQL)
+    ↓
+Real-time (Socket.io)
+    ↓
+Alerts (AWS SNS)
+```
+
+## Main Components
+- **Backend**: Express API with real-time simulation
+- **Frontend**: React dashboard with Chart.js
+- **Database**: PostgreSQL with patient/vitals data
+- **ML Model**: Logistic regression for sepsis scoring
 
 ## API Endpoints
+- `/api/auth/*` - Authentication
+- `/api/priority-patients` - Patient list
+- `/api/score/:id` - Sepsis risk score
+- `/api/alerts` - Real-time alerts
+- `/api/vitals/stream/:id` - Patient vitals
 
-- `GET /api/patients/overview` - Get all active ICU patients
-- `GET /api/alerts/recent` - Get recent alerts
-- `GET /api/dashboard/stats` - Get dashboard statistics
-- `GET /api/priority/list` - Get prioritized patients
+## Project Structure
+```
+icu-backend_PAYAL/
+├── app.js              # Main server
+├── simulator.js        # Vitals simulation
+├── routes/
+│   ├── score.js       # ML scoring
+│   ├── auth.js        # Authentication
+│   └── patients.js    # Patient management
+└── db.js              # Database config
+
+icu-frontend_new/
+├── components/
+│   ├── Dashboard.js   # Main view
+│   ├── PatientDetail.js
+│   └── VitalsMonitor.js
+└── utils/
+    ├── api.js         # API calls
+    └── socket.js      # Real-time
+```
 
 ## Technologies Used
+- **Backend**: Node.js, Express, Socket.io, JWT
+- **Frontend**: React 18, Chart.js, Axios
+- **Database**: PostgreSQL
+- **Cloud**: AWS SNS
+- **ML**: Logistic Regression
 
-### Backend
-- Express.js
-- Node.js
-- CORS for cross-origin requests
+## Demo Instructions
+1. Login with test credentials
+2. View patient dashboard
+3. Click on patient for real-time vitals
+4. Monitor alerts panel
+5. Check sepsis risk scores
 
-### Frontend
-- React
-- React Router for navigation
-- Axios for API requests
-- Recharts for data visualization
-- Tailwind CSS for styling
+## Known Issues
+- Database connection may timeout under heavy load
+- Sepsis scores may show "N/A" if features missing
+- Real-time updates require active socket connection
 
 ## Future Enhancements
+- Add more ML models
+- Implement data export
+- Mobile responsive design
+- Additional vital parameters
 
-- Patient detail view with comprehensive medical history
-- Real-time updates using WebSockets
-- Advanced filtering and searching capabilities
-- Customizable dashboard layouts
-- User authentication and role-based access control
-- Mobile responsive design for tablet use at bedside
+## References
+- [MIMIC-III Database](https://mimic.physionet.org/)
+- [Sepsis Prediction Research Papers]
+- [AWS SNS Documentation]
+
+## License
+Academic use only - Graduate Project 2024
