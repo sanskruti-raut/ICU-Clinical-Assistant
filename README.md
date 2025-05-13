@@ -82,27 +82,6 @@ Alerts (AWS SNS)
 - `/api/alerts` - Real-time alerts
 - `/api/vitals/stream/:id` - Patient vitals
 
-## Project Structure
-```
-icu-backend_PAYAL/
-├── app.js              # Main server
-├── simulator.js        # Vitals simulation
-├── routes/
-│   ├── score.js       # ML scoring
-│   ├── auth.js        # Authentication
-│   └── patients.js    # Patient management
-└── db.js              # Database config
-
-icu-frontend_new/
-├── components/
-│   ├── Dashboard.js   # Main view
-│   ├── PatientDetail.js
-│   └── VitalsMonitor.js
-└── utils/
-    ├── api.js         # API calls
-    └── socket.js      # Real-time
-```
-
 ## Technologies Used
 - **Backend**: Node.js, Express, Socket.io, JWT
 - **Frontend**: React 18, Chart.js, Axios
@@ -122,16 +101,6 @@ icu-frontend_new/
 - Sepsis scores may show "N/A" if features missing
 - Real-time updates require active socket connection
 
-## Future Enhancements
-- Add more ML models
-- Implement data export
-- Mobile responsive design
-- Additional vital parameters
 
 ## References
 - [MIMIC-III Database](https://mimic.physionet.org/)
-- [Sepsis Prediction Research Papers]
-- [AWS SNS Documentation]
-
-## License
-Academic use only - Graduate Project 2024
